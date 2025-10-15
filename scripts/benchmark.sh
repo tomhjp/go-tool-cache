@@ -3,14 +3,13 @@ set -eo pipefail
 
 GOCMD="${@:-go build github.com/bradfitz/go-tool-cache/...}"
 export LATENCY="${LATENCY:-0}"
-export MISS_PERCENTAGE="${MISS_PERCENTAGE:-0}"
 
 which hyperfine > /dev/null 2>&1 || (echo "Must install hyperfine" && exit 1)
 which go-cacher > /dev/null 2>&1 || go install github.com/bradfitz/go-tool-cache/cmd/go-cacher
 which go-cacher-server > /dev/null 2>&1 || go install github.com/bradfitz/go-tool-cache/cmd/go-cacher-server
 
 export RUN_DIR=$(mktemp -d)
-echo "Using RUN_DIR=$RUN_DIR, LATENCY=$LATENCY, MISS_PERCENTAGE=$MISS_PERCENTAGE"
+echo "Using RUN_DIR=$RUN_DIR, LATENCY=$LATENCY"
 
 cleanup() {
     if [ -f "$RUN_DIR/server.pid" ]; then
@@ -25,7 +24,7 @@ setup() {
         return
     fi
 
-    echo "Starting go-cacher-server with LATENCY=$LATENCY, MISS_PERCENTAGE=$MISS_PERCENTAGE"
+    echo "Starting go-cacher-server with LATENCY=$LATENCY"
     go-cacher-server -inject-latency="${LATENCY}" -cache-dir="$(mktemp -d -p "$RUN_DIR" srv_cache_XXXX)" &
     echo $! > "$RUN_DIR/server.pid"
     sleep 1
@@ -50,7 +49,7 @@ if [[ "${COLD:-true}" == "true" ]]; then
         --prepare 'setup' \
         --cleanup 'cleanup_run' \
         --shell bash \
-        'GOCACHEPROG="go-cacher -cache-dir=$(mktemp -d -p "$RUN_DIR" cmd_cache_XXXX) -cache-server=http://localhost:31364 -miss-percentage=${MISS_PERCENTAGE}" '"$GOCMD"
+        'GOCACHEPROG="go-cacher -cache-dir=$(mktemp -d -p "$RUN_DIR" cmd_cache_XXXX) -cache-server=http://localhost:31364" '"$GOCMD"
 fi
 
 if [[ "${WARM:-true}" == "true" ]]; then
@@ -61,5 +60,5 @@ if [[ "${WARM:-true}" == "true" ]]; then
         --prepare 'setup' \
         --warmup 1 \
         --shell bash \
-        'GOCACHEPROG="go-cacher -cache-dir=$CMD_CACHE_DIR -cache-server=http://localhost:31364 -miss-percentage=${MISS_PERCENTAGE}" '"$GOCMD"
+        'GOCACHEPROG="go-cacher -cache-dir=$CMD_CACHE_DIR -cache-server=http://localhost:31364" '"$GOCMD"
 fi
