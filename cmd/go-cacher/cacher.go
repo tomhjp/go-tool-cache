@@ -6,9 +6,12 @@
 package main
 
 import (
+	"context"
+	"crypto/rand"
 	"flag"
 	"fmt"
 	"log"
+	"math/big"
 	"net"
 	"os"
 	"os/exec"
@@ -26,6 +29,7 @@ var (
 	serverBase = flag.String("cache-server", "", "optional cache server HTTP prefix (scheme and authority only); should be low latency. empty means to not use one.")
 	verbose    = flag.Bool("verbose", false, "be verbose")
 	gwPort     = flag.Int("gateway-addr-port", 0, "if non-zero, try to use an HTTP server on this port on our machine's gateway IP. If that fails, use local disk instead.")
+	missPct    = flag.Int64("miss-percentage", 0, "[0, 100], the percentage chance of returning a cache miss for a request before checking cache contents (for testing)")
 )
 
 func main() {
@@ -87,6 +91,17 @@ func main() {
 		}
 		p.Get = hc.Get
 		p.Put = hc.Put
+	}
+
+	if *missPct > 0 {
+		get := p.Get
+		p.Get = func(ctx context.Context, actionID string) (outputID, diskPath string, _ error) {
+			if n, err := rand.Int(rand.Reader, big.NewInt(101)); err == nil && n.Int64() < *missPct {
+				return "", "", nil
+			}
+
+			return get(ctx, actionID)
+		}
 	}
 
 	if err := p.Run(); err != nil {
